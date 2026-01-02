@@ -19,8 +19,8 @@
 #include "aime.h"
 #include "nfc.h"
 
-#define SENSE_LIMIT_MAX 9
-#define SENSE_LIMIT_MIN -9
+#define SENSE_LIMIT_MAX 20
+#define SENSE_LIMIT_MIN -20
 
 static void disp_rgb()
 {

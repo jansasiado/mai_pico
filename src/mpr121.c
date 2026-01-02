@@ -12,8 +12,8 @@
 
 #define IO_TIMEOUT_US 1000
 
-#define TOUCH_THRESHOLD_BASE 22
-#define RELEASE_THRESHOLD_BASE 15
+#define TOUCH_THRESHOLD_BASE 25
+#define RELEASE_THRESHOLD_BASE 20
 
 #define MPR121_TOUCH_STATUS_REG 0x00
 #define MPR121_OUT_OF_RANGE_STATUS_0_REG 0x02
@@ -94,7 +94,7 @@ void mpr121_init(uint8_t i2c_addr)
     //touched: baseline very slow falling
     write_reg(i2c_addr, 0x33, 1); // Noise half delta Touched 
     write_reg(i2c_addr, 0x34, 8); // Noise count Touched 
-    write_reg(i2c_addr, 0x35, 30); // Delay limit Touched 
+    write_reg(i2c_addr, 0x35, 20); // Delay limit Touched 
 
     //Touch pad threshold 
     for (int i = 0; i < 12; i++) {
@@ -123,9 +123,9 @@ void mpr121_init(uint8_t i2c_addr)
     // (Auto configure result) alone. 
 
     // I want to max out sensitivity, I don't care linearity
-    const uint8_t usl = 255; //(3.3 - 0.0) / 3.3 * 256;
+    const uint8_t usl = 201; //(3.3 - 0.0) / 3.3 * 256;
     write_reg(i2c_addr, 0x7D, usl),  
-    write_reg(i2c_addr, 0x7E, usl * 0.65),
+    write_reg(i2c_addr, 0x7E, usl * 0.2),
     write_reg(i2c_addr, 0x7F, usl * 0.9);
 
     write_reg(i2c_addr, 0x5E, 0x8C); // Run 12 touch, load 5MSB to baseline 

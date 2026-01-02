@@ -3,3 +3,4 @@ pico-examples
 pico-sdk
 .vscode
 .vs
+.cache
