@@ -7,5 +7,4 @@
 #define COMMANDS_H
 
 void commands_init();
-
 #endif

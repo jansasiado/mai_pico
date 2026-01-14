@@ -21,9 +21,37 @@ static mai_cfg_t default_cfg = {
         .level = 127,
     },
     .sense = {
+#ifdef PSOC
+        .param[0] = {
+            .finger_threshold = 120,
+            .noise_threshold = 50,
+            .neg_noise_threshold = 850,
+            .low_baseline_reset = 30,
+            .hysteresis = 5,
+            .on_debounce = 3,
+        },
+        .param[1] = {
+            .finger_threshold = 20,
+            .noise_threshold = 20,
+            .neg_noise_threshold = 850,
+            .low_baseline_reset = 30,
+            .hysteresis = 5,
+            .on_debounce = 3,
+        },
+        .param[2] = {
+            .finger_threshold = 200,
+            .noise_threshold = 150,
+            .neg_noise_threshold = 1900,
+            .low_baseline_reset = 30,
+            .hysteresis = 5,
+            .on_debounce = 3,
+        },
+        .zones = {0},
+#else
         .filter = 0x10,
         .debounce_touch = 1,
         .debounce_release = 2,
+#endif
      },
     .hid = {
         .io4 = 1,
@@ -73,6 +101,9 @@ static bool touch_map_valid()
 
 static void config_loaded()
 {
+    #ifdef PSOC
+    
+    #else
     if ((mai_cfg->sense.filter & 0x0f) > 3 ||
         ((mai_cfg->sense.filter >> 4) & 0x0f) > 3) {
         mai_cfg->sense = default_cfg.sense;
@@ -95,6 +126,7 @@ static void config_loaded()
         config_changed();
     }
 
+    #endif
     if (!in_range(mai_cfg->rgb.per_button, 1, 16) ||
         !in_range(mai_cfg->rgb.per_cab, 0, 128)) {
         mai_cfg->rgb = default_cfg.rgb;
@@ -106,6 +138,7 @@ static void config_loaded()
                sizeof(mai_cfg->alt.touch));
         config_changed();
     }
+    
 }
 
 void config_changed()

@@ -1,15 +1,20 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <ctype.h>
-
+#include "board_defs.h"
 #include "pico/stdio.h"
 #include "pico/stdlib.h"
 
 #include "tusb.h"
 
+#ifdef PSOC
+#include "psoc.h"
+#else
 #include "mpr121.h"
+#endif
 #include "touch.h"
 #include "button.h"
 #include "config.h"
@@ -31,7 +36,24 @@ static void disp_rgb()
            mai_cfg->color.key_on, mai_cfg->color.key_off, mai_cfg->color.level);
 }
 
-static void print_sense_zone(const char *title, const int8_t *zones, int num)
+
+
+#ifdef PSOC
+static void disp_touch()
+{
+    printf("[Touch]\n");
+    printf("     ADDR|_0|_1|_2|_3|_4|_5|_6|_7|_8|_9|10|11|\n");
+
+    for (int m = 0; m < 3; m++) {
+        printf("  %d: 0x%02x|", m, PSOC_BASE_ADDR + m);
+        for (int chn = 0; chn < 12; chn++) {
+            int key = touch_key_from_channel(m * 12 + chn);
+            printf("%2s|", touch_key_name(key));
+        }
+        printf("\n");
+    }
+}
+static void print_sense_zone(const char *title, const uint8_t *zones, int num)
 {
     printf("   %s |", title);
     for (int i = 0; i < num; i++) {
@@ -40,22 +62,90 @@ static void print_sense_zone(const char *title, const int8_t *zones, int num)
     printf("\n");
 }
 
+static void print_sense_zone_s(const char *title, const int8_t *zones, int num)
+{
+    printf("   %s |", title);
+    for (int i = 0; i < num; i++) {
+        printf("%3d|", zones[i]);
+    }
+    printf("\n");
+}
+
+
+static void disp_sense(){
+    printf("[Sense]\n");
+    printf("Address                 %2x    %2x    %2x\n",PSOC_BASE_ADDR,PSOC_BASE_ADDR+1,PSOC_BASE_ADDR+2);
+    printf("Finger Threshold      | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].finger_threshold, mai_cfg->sense.param[1].finger_threshold, mai_cfg->sense.param[2].finger_threshold);
+    printf("Noise Threshold       | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].noise_threshold, mai_cfg->sense.param[1].noise_threshold, mai_cfg->sense.param[2].noise_threshold);
+    printf("Neg. Noise Threshold  | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].neg_noise_threshold, mai_cfg->sense.param[1].neg_noise_threshold,mai_cfg->sense.param[2].neg_noise_threshold);
+    printf("Low Baseline Reset    | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].low_baseline_reset, mai_cfg->sense.param[1].low_baseline_reset, mai_cfg->sense.param[2].low_baseline_reset);
+    printf("Hysteresis            | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].hysteresis, mai_cfg->sense.param[1].hysteresis, mai_cfg->sense.param[2].hysteresis);
+    printf("ON Debounce           | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].on_debounce, mai_cfg->sense.param[1].on_debounce, mai_cfg->sense.param[2].on_debounce);
+    
+}
+
+static void disp_idac(){
+    printf("IDAC offset\n");
+        printf("     |_1_|_2_|_3_|_4_|_5_|_6_|_7_|_8_|\n");
+        print_sense_zone_s("A", mai_cfg->sense.zones, 8);
+    print_sense_zone_s("B", mai_cfg->sense.zones + 8, 8);
+    print_sense_zone_s("C", mai_cfg->sense.zones + 16, 2);
+    print_sense_zone_s("D", mai_cfg->sense.zones + 18, 8);
+    print_sense_zone_s("E", mai_cfg->sense.zones + 26, 8);
+    printf("\n");
+    uint8_t buf[34];
+    touch_load_idac(buf);
+    printf("Compensation IDAC\n");
+        printf("     |_1_|_2_|_3_|_4_|_5_|_6_|_7_|_8_|\n");
+    print_sense_zone("A", buf, 8);
+    print_sense_zone("B", buf + 8, 8);
+    print_sense_zone("C", buf + 16, 2);
+    print_sense_zone("D", buf + 18, 8);
+    print_sense_zone("E", buf + 26, 8);
+    printf("\n");
+}
+#else
+static void print_sense_zone(const char *title, const int8_t *zones, int num)
+{
+    printf("   %s |", title);
+    for (int i = 0; i < num; i++) {
+        printf("%2d |", zones[i]);
+    }
+    printf("\n");
+}
+static void disp_touch()
+{
+    printf("[Touch]\n");
+    printf("     ADDR|_0|_1|_2|_3|_4|_5|_6|_7|_8|_9|10|11|\n");
+
+    for (int m = 0; m < 3; m++) {
+        printf("  %d: 0x%02x|", m, MPR121_BASE_ADDR + m);
+        for (int chn = 0; chn < 12; chn++) {
+            int key = touch_key_from_channel(m * 12 + chn);
+            printf("%2s|", touch_key_name(key));
+        }
+        printf("\n");
+    }
+}
+
 static void disp_sense()
 {
     printf("[Sense]\n");
     printf("  Filter: %u, %u, %u\n", mai_cfg->sense.filter >> 6,
-                                    (mai_cfg->sense.filter >> 4) & 0x03,
-                                    mai_cfg->sense.filter & 0x07);
-    printf("  Sensitivity (global: %+d):\n", mai_cfg->sense.global);
-    printf("     |_1_|_2_|_3_|_4_|_5_|_6_|_7_|_8_|\n");
-    print_sense_zone("A", mai_cfg->sense.zones, 8);
+        (mai_cfg->sense.filter >> 4) & 0x03,
+        mai_cfg->sense.filter & 0x07);
+        printf("  Sensitivity (global: %+d):\n", mai_cfg->sense.global);
+        printf("     |_1_|_2_|_3_|_4_|_5_|_6_|_7_|_8_|\n");
+        print_sense_zone("A", mai_cfg->sense.zones, 8);
     print_sense_zone("B", mai_cfg->sense.zones + 8, 8);
     print_sense_zone("C", mai_cfg->sense.zones + 16, 2);
     print_sense_zone("D", mai_cfg->sense.zones + 18, 8);
     print_sense_zone("E", mai_cfg->sense.zones + 26, 8);
     printf("  Debounce (touch, release): %d, %d\n",
-           mai_cfg->sense.debounce_touch, mai_cfg->sense.debounce_release);
+        mai_cfg->sense.debounce_touch, mai_cfg->sense.debounce_release);
 }
+
+#endif
 
 static void disp_hid()
 {
@@ -87,20 +177,6 @@ static void disp_gpio()
         button_real_gpio(10), button_real_gpio(11));
 }
 
-static void disp_touch()
-{
-    printf("[Touch]\n");
-    printf("     ADDR|_0|_1|_2|_3|_4|_5|_6|_7|_8|_9|10|11|\n");
-
-    for (int m = 0; m < 3; m++) {
-        printf("  %d: 0x%02x|", m, MPR121_BASE_ADDR + m);
-        for (int chn = 0; chn < 12; chn++) {
-            int key = touch_key_from_channel(m * 12 + chn);
-            printf("%2s|", touch_key_name(key));
-        }
-        printf("\n");
-    }
-}
 
 static void disp_tweak()
 {
@@ -115,16 +191,17 @@ static void disp_tweak()
 
 void handle_display(int argc, char *argv[])
 {
-    const char *usage = "Usage: display [rgb|sense|hid|gpio|touch|aime|tweak]\n";
+    const char *usage = "Usage: display [rgb|sense|idac|hid|gpio|touch|aime|tweak]\n";
     if (argc > 1) {
         printf(usage);
         return;
     }
 
-    const char *choices[] = {"rgb", "sense", "hid", "gpio", "touch", "aime", "tweak"};
+    const char *choices[] = {"rgb", "sense", "idac", "hid", "gpio", "touch", "aime", "tweak"};
     static void (*disp_funcs[])() = {
         disp_rgb,
         disp_sense,
+        disp_idac,
         disp_hid,
         disp_gpio,
         disp_touch,
@@ -256,37 +333,7 @@ static void handle_hid(int argc, char *argv[])
     disp_hid();
 }
 
-static void handle_filter(int argc, char *argv[])
-{
-    const char *usage = "Usage: filter <first> <second> [interval]\n"
-                        "Adjusts MPR121 noise filtering parameters (see datasheets).\n"
-                        "    first:    First Filter Iterations  (FFI) [0..3]\n"
-                        "    second:   Second Filter Iterations (SFI) [0..3]\n"
-                        "    interval: Electrode Sample Interval (ESI) [0..7]\n";
-    if ((argc < 2) || (argc > 3)) {
-        printf(usage);
-        return;
-    }
 
-    int ffi = cli_extract_non_neg_int(argv[0], 0);
-    int sfi = cli_extract_non_neg_int(argv[1], 0);
-    int intv = mai_cfg->sense.filter & 0x07;
-    if (argc == 3) {
-        intv = cli_extract_non_neg_int(argv[2], 0);
-    }
-
-    if ((ffi < 0) || (ffi > 3) || (sfi < 0) || (sfi > 3) ||
-        (intv < 0) || (intv > 7)) {
-        printf(usage);
-        return;
-    }
-
-    mai_cfg->sense.filter = (ffi << 6) | (sfi << 4) | intv;
-
-    touch_update_config();
-    config_changed();
-    disp_sense();
-}
 
 static int8_t *extract_key(const char *param)
 {
@@ -296,7 +343,7 @@ static int8_t *extract_key(const char *param)
 
     int zone = param[0] - 'A';
     int id = param[1] - '1';
-
+    
     if (zone < 0 || zone > 4 || id < 0 || id > 7) {
         return NULL;
     }
@@ -305,10 +352,11 @@ static int8_t *extract_key(const char *param)
     }
 
     const int offsets[] = { 0, 8, 16, 18, 26 };
-
+    
     return &mai_cfg->sense.zones[offsets[zone] + id];
 }
 
+#ifndef PSOC
 static void sense_do_op(int8_t *target, char op)
 {
     if (op == '+') {
@@ -323,80 +371,8 @@ static void sense_do_op(int8_t *target, char op)
         *target = 0;
     }
 }
+#endif
 
-static void handle_sense(int argc, char *argv[])
-{
-    const char *usage = "Usage: sense [key|*] <+|-|0>\n"
-                        "Example:\n"
-                        "  >sense +\n"
-                        "  >sense -\n"
-                        "  >sense A3 +\n"
-                        "  >sense C1 -\n"
-                        "  >sense * 0\n";
-    if ((argc < 1) || (argc > 2)) {
-        printf(usage);
-        return;
-    }
-
-    const char *op = argv[argc - 1];
-    if ((strlen(op) != 1) || !strchr("+-0", op[0])) {
-        printf(usage);
-        return;
-    }
-
-    if (argc == 1) {
-        sense_do_op(&mai_cfg->sense.global, op[0]);
-    } else {
-        if (strcmp(argv[0], "*") == 0) {
-            for (int i = 0; i < sizeof(mai_cfg->sense.zones); i++) {
-                sense_do_op(&mai_cfg->sense.zones[i], op[0]);
-            }
-        } else {
-            int8_t *key = extract_key(argv[0]);
-            if (!key) {
-                printf(usage);
-                return;
-            }
-            sense_do_op(key, op[0]);
-        }
-    }
-
-    touch_update_config();
-    config_changed();
-    disp_sense();
-}
-
-static void handle_debounce(int argc, char *argv[])
-{
-    const char *usage = "Usage: debounce <touch> [release]\n"
-                        "  touch, release: 0..7\n";
-    if ((argc < 1) || (argc > 2)) {
-        printf(usage);
-        return;
-    }
-
-    int touch = mai_cfg->sense.debounce_touch;
-    int release = mai_cfg->sense.debounce_release;
-    if (argc >= 1) {
-        touch = cli_extract_non_neg_int(argv[0], 0);
-    }
-    if (argc == 2) {
-        release = cli_extract_non_neg_int(argv[1], 0);
-    }
-
-    if ((touch < 0) || (release < 0) ||
-        (touch > 7) || (release > 7)) {
-        printf(usage);
-        return;
-    }
-
-    mai_cfg->sense.debounce_touch = touch;
-    mai_cfg->sense.debounce_release = release;
-
-    touch_update_config();
-    config_changed();
-    disp_sense();
-}
 
 static void print_readings(const char *title, const uint16_t *readings, int num)
 {
@@ -407,32 +383,7 @@ static void print_readings(const char *title, const uint16_t *readings, int num)
     printf("\n");
 }
 
-static void handle_raw()
-{
-    const uint16_t *raw = touch_raw();
-    const uint16_t *zones = map_raw_to_zones(raw);
 
-    printf("Touch raw readings:\n");
-
-    printf("   Sensor: 0: %s, 1: %s 2: %s\n",
-            touch_sensor_ok(0) ? "OK" : "ERR",
-            touch_sensor_ok(1) ? "OK" : "ERR",
-            touch_sensor_ok(2) ? "OK" : "ERR");
-    
-    printf("   By Sensor:\n");
-    printf("   |___1__|___2__|___3__|___4__|___5__|___6__|___7__|___8__|___9__|__10__|__11__|__12__|\n");
-    print_readings("0", raw, 12);
-    print_readings("1", raw + 12, 12);
-    print_readings("2", raw + 24, 12);
-
-    printf("   By Zone:\n");
-    printf("   |___1__|___2__|___3__|___4__|___5__|___6__|___7__|___8__|\n");
-    print_readings("A", zones, 8);
-    print_readings("B", zones + 8, 8);
-    print_readings("C", zones + 16, 2);
-    print_readings("D", zones + 18, 8);
-    print_readings("E", zones + 26, 8);
-}
 
 static void handle_whoami()
 {
@@ -650,6 +601,273 @@ static void handle_tweak(int argc, char *argv[])
     config_changed();
     disp_tweak();
 }
+#ifdef PSOC
+static void handle_sense(int argc, char *argv[])
+{
+    const char *usage = "Usage: sense <addr> <param> <value>\n"
+                        "addr: 0-2\n"
+                        "param:\n"
+                            "0:finger_threshold, 1:noise_threshold, 2:neg_noise_threshold, 3:low_baseline_reset, 4:hysteresis, 5:on_debounce\n";
+
+    if (argc!=3) {
+        printf(usage);
+        return;
+    }
+    uint8_t addr = cli_extract_non_neg_int(argv[0],0);
+    if(addr > 2){
+        printf(usage);
+        return;
+    }
+
+    uint16_t val = cli_extract_non_neg_int(argv[2],0);
+    uint8_t param = cli_extract_non_neg_int(argv[1],0);
+
+    if(param == 0){
+        mai_cfg->sense.param[addr].finger_threshold = val;
+    }
+    if(param == 1){
+        mai_cfg->sense.param[addr].noise_threshold = val;
+    }
+    if(param == 2){
+        mai_cfg->sense.param[addr].neg_noise_threshold = val;
+    }
+    if(param == 3){
+        mai_cfg->sense.param[addr].low_baseline_reset = (uint8_t) val;
+    }
+    if(param == 4){
+        mai_cfg->sense.param[addr].hysteresis = (uint8_t) val;
+    }
+    if(param == 5){
+        mai_cfg->sense.param[addr].on_debounce = (uint8_t) val;
+    }
+
+    touch_update_config();
+    config_changed();
+    disp_sense();
+}
+static void handle_idac(int argc, char *argv[]){
+    const char *usage = "Usage: idac <key> <+/-> <offset>\n";
+    if (argc!=3) {
+        printf(usage);
+        return;
+    }
+
+    if(strcmp(argv[1], "+") == 0 && strcmp(argv[1], "-") == 0){
+        printf(usage);
+        return;
+    }
+
+    int8_t val = cli_extract_non_neg_int(argv[2],0);
+
+    if(strcmp(argv[1], "-") == 0){
+        val = -val;
+    }
+
+    int8_t *key = extract_key(argv[0]);
+    if (!key) {
+        printf(usage);
+        return;
+    }
+    *key = val;
+
+    touch_update_config();
+    config_changed();
+    disp_idac();
+}
+
+static void handle_raw()
+{
+    const uint16_t *raw = touch_raw();
+    const uint16_t *zones = map_raw_to_zones(raw);
+
+    printf("Touch raw readings:\n");
+
+    printf("   Sensor: 0: %s, 1: %s 2: %s\n",
+            touch_sensor_ok(0) ? "OK" : "ERR",
+            touch_sensor_ok(1) ? "OK" : "ERR",
+            touch_sensor_ok(2) ? "OK" : "ERR");
+    
+    printf("   By Sensor:\n");
+    printf("   |___1__|___2__|___3__|___4__|___5__|___6__|___7__|___8__|___9__|__10__|__11__|__12__|\n");
+    print_readings("0", raw, 12);
+    print_readings("1", raw + 12, 12);
+    print_readings("2", raw + 24, 10);
+
+    printf("   By Zone:\n");
+    printf("   |___1__|___2__|___3__|___4__|___5__|___6__|___7__|___8__|\n");
+    print_readings("A", zones, 8);
+    print_readings("B", zones + 8, 8);
+    print_readings("C", zones + 16, 2);
+    print_readings("D", zones + 18, 8);
+    print_readings("E", zones + 26, 8);
+}
+
+
+#else
+static void disp_touch()
+{
+    printf("[Touch]\n");
+    printf("     ADDR|_0|_1|_2|_3|_4|_5|_6|_7|_8|_9|10|11|\n");
+
+    for (int m = 0; m < 3; m++) {
+        printf("  %d: 0x%02x|", m, MPR121_BASE_ADDR + m);
+        for (int chn = 0; chn < 12; chn++) {
+            int key = touch_key_from_channel(m * 12 + chn);
+            printf("%2s|", touch_key_name(key));
+        }
+        printf("\n");
+    }
+}
+
+static void disp_sense()
+{
+    printf("[Sense]\n");
+    printf("  Filter: %u, %u, %u\n", mai_cfg->sense.filter >> 6,
+        (mai_cfg->sense.filter >> 4) & 0x03,
+        mai_cfg->sense.filter & 0x07);
+        printf("  Sensitivity (global: %+d):\n", mai_cfg->sense.global);
+        printf("     |_1_|_2_|_3_|_4_|_5_|_6_|_7_|_8_|\n");
+        print_sense_zone("A", mai_cfg->sense.zones, 8);
+    print_sense_zone("B", mai_cfg->sense.zones + 8, 8);
+    print_sense_zone("C", mai_cfg->sense.zones + 16, 2);
+    print_sense_zone("D", mai_cfg->sense.zones + 18, 8);
+    print_sense_zone("E", mai_cfg->sense.zones + 26, 8);
+    printf("  Debounce (touch, release): %d, %d\n",
+        mai_cfg->sense.debounce_touch, mai_cfg->sense.debounce_release);
+}
+
+static void handle_filter(int argc, char *argv[])
+{
+    const char *usage = "Usage: filter <first> <second> [interval]\n"
+                        "Adjusts MPR121 noise filtering parameters (see datasheets).\n"
+                        "    first:    First Filter Iterations  (FFI) [0..3]\n"
+                        "    second:   Second Filter Iterations (SFI) [0..3]\n"
+                        "    interval: Electrode Sample Interval (ESI) [0..7]\n";
+    if ((argc < 2) || (argc > 3)) {
+        printf(usage);
+        return;
+    }
+
+    int ffi = cli_extract_non_neg_int(argv[0], 0);
+    int sfi = cli_extract_non_neg_int(argv[1], 0);
+    int intv = mai_cfg->sense.filter & 0x07;
+    if (argc == 3) {
+        intv = cli_extract_non_neg_int(argv[2], 0);
+    }
+
+    if ((ffi < 0) || (ffi > 3) || (sfi < 0) || (sfi > 3) ||
+        (intv < 0) || (intv > 7)) {
+        printf(usage);
+        return;
+    }
+
+    mai_cfg->sense.filter = (ffi << 6) | (sfi << 4) | intv;
+
+    touch_update_config();
+    config_changed();
+    disp_sense();
+}
+
+static void handle_raw()
+{
+    const uint16_t *raw = touch_raw();
+    const uint16_t *zones = map_raw_to_zones(raw);
+
+    printf("Touch raw readings:\n");
+
+    printf("   Sensor: 0: %s, 1: %s 2: %s\n",
+            touch_sensor_ok(0) ? "OK" : "ERR",
+            touch_sensor_ok(1) ? "OK" : "ERR",
+            touch_sensor_ok(2) ? "OK" : "ERR");
+    
+    printf("   By Sensor:\n");
+    printf("   |___1__|___2__|___3__|___4__|___5__|___6__|___7__|___8__|___9__|__10__|__11__|__12__|\n");
+    print_readings("0", raw, 12);
+    print_readings("1", raw + 12, 12);
+    print_readings("2", raw + 24, 12);
+
+    printf("   By Zone:\n");
+    printf("   |___1__|___2__|___3__|___4__|___5__|___6__|___7__|___8__|\n");
+    print_readings("A", zones, 8);
+    print_readings("B", zones + 8, 8);
+    print_readings("C", zones + 16, 2);
+    print_readings("D", zones + 18, 8);
+    print_readings("E", zones + 26, 8);
+}
+static void handle_sense(int argc, char *argv[])
+{
+    const char *usage = "Usage: sense [key|*] <+|-|0>\n"
+                        "Example:\n"
+                        "  >sense +\n"
+                        "  >sense -\n"
+                        "  >sense A3 +\n"
+                        "  >sense C1 -\n"
+                        "  >sense * 0\n";
+    if ((argc < 1) || (argc > 2)) {
+        printf(usage);
+        return;
+    }
+
+    const char *op = argv[argc - 1];
+    if ((strlen(op) != 1) || !strchr("+-0", op[0])) {
+        printf(usage);
+        return;
+    }
+
+    if (argc == 1) {
+        sense_do_op(&mai_cfg->sense.global, op[0]);
+    } else {
+        if (strcmp(argv[0], "*") == 0) {
+            for (int i = 0; i < sizeof(mai_cfg->sense.zones); i++) {
+                sense_do_op(&mai_cfg->sense.zones[i], op[0]);
+            }
+        } else {
+            int8_t *key = extract_key(argv[0]);
+            if (!key) {
+                printf(usage);
+                return;
+            }
+            sense_do_op(key, op[0]);
+        }
+    }
+
+    touch_update_config();
+    config_changed();
+    disp_sense();
+}
+
+static void handle_debounce(int argc, char *argv[])
+{
+    const char *usage = "Usage: debounce <touch> [release]\n"
+                        "  touch, release: 0..7\n";
+    if ((argc < 1) || (argc > 2)) {
+        printf(usage);
+        return;
+    }
+
+    int touch = mai_cfg->sense.debounce_touch;
+    int release = mai_cfg->sense.debounce_release;
+    if (argc >= 1) {
+        touch = cli_extract_non_neg_int(argv[0], 0);
+    }
+    if (argc == 2) {
+        release = cli_extract_non_neg_int(argv[1], 0);
+    }
+
+    if ((touch < 0) || (release < 0) ||
+        (touch > 7) || (release > 7)) {
+        printf(usage);
+        return;
+    }
+
+    mai_cfg->sense.debounce_touch = touch;
+    mai_cfg->sense.debounce_release = release;
+
+    touch_update_config();
+    config_changed();
+    disp_sense();
+}
+#endif 
 
 void commands_init()
 {
@@ -658,9 +876,13 @@ void commands_init()
     cli_register("level", handle_level, "Set LED brightness level.");
     cli_register("stat", handle_stat, "Display or reset statistics.");
     cli_register("hid", handle_hid, "Set HID mode.");
+    cli_register("sense", handle_sense, "Set per-controller sensitivity");
+#ifdef PSOC
+    cli_register("idac", handle_idac, "Set IDAC compensation per sensor");
+#else
     cli_register("filter", handle_filter, "Set pre-filter config.");
-    cli_register("sense", handle_sense, "Set sensitivity config.");
     cli_register("debounce", handle_debounce, "Set debounce config.");
+#endif
     cli_register("raw", handle_raw, "Show key raw readings.");
     cli_register("whoami", handle_whoami, "Identify each com port.");
     cli_register("save", handle_save, "Save config to flash.");

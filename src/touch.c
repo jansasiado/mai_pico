@@ -6,6 +6,7 @@
 
 #include "touch.h"
 
+#include <pico/time.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -18,7 +19,12 @@
 #include "board_defs.h"
 
 #include "config.h"
+
+#ifdef PSOC
+#include "psoc.h"
+#else
 #include "mpr121.h"
+#endif
 
 static uint16_t touch[3];
 static unsigned touch_counts[36];
@@ -27,10 +33,17 @@ static uint8_t touch_map[] = TOUCH_MAP;
 
 void touch_sensor_init()
 {
+#ifdef PSOC
     for (int m = 0; m < 3; m++) {
-        mpr121_init(MPR121_BASE_ADDR + m);
+        psoc_init(PSOC_BASE_ADDR + m);
     }
-    touch_update_config();
+#else
+for (int m = 0; m < 3; m++) {
+    mpr121_init(MPR121_BASE_ADDR + m);
+}
+touch_update_config();
+#endif
+
 }
 
 void touch_init()
@@ -41,7 +54,7 @@ void touch_init()
     gpio_pull_up(I2C_SDA);
     gpio_pull_up(I2C_SCL);
 
-    touch_sensor_init();    
+    touch_update_config();    
     memcpy(touch_map, mai_cfg->alt.touch, sizeof(touch_map));
 }
 
@@ -139,10 +152,15 @@ static void touch_stat()
 
 void touch_update()
 {
+#ifdef PSOC
+    touch[0] = psoc_touched(PSOC_BASE_ADDR) & 0x0fff;
+    touch[1] = psoc_touched(PSOC_BASE_ADDR + 1) & 0x0fff;
+    touch[2] = psoc_touched(PSOC_BASE_ADDR + 2) & 0x0fff;
+#else
     touch[0] = mpr121_touched(MPR121_BASE_ADDR) & 0x0fff;
     touch[1] = mpr121_touched(MPR121_BASE_ADDR + 1) & 0x0fff;
     touch[2] = mpr121_touched(MPR121_BASE_ADDR + 2) & 0x0fff;
-
+#endif
     remap_reading();
 
     touch_stat();
@@ -164,7 +182,11 @@ const uint16_t *touch_raw()
     uint16_t buf[36] = {0};
 
     for (int i = 0; i < 3; i++) {
+#ifdef PSOC
+        sensor_ok[i] = psoc_raw(PSOC_BASE_ADDR+i, buf+i*12, 12);
+#else
         sensor_ok[i] = mpr121_raw(MPR121_BASE_ADDR + i, buf + i * 12, 12);
+#endif
     }
     memcpy(readout, buf, sizeof(readout));
 
@@ -202,6 +224,26 @@ unsigned touch_count(unsigned key)
     }
     return touch_counts[key];
 }
+void touch_set_idac(){
+    uint8_t t, a, s;
+    for(uint8_t i = 0; i < 34; i++){
+        t = touch_key_from_channel(i);
+        a = t/12;
+        s = t%12;
+        psoc_set_idac(PSOC_BASE_ADDR+a, s, mai_cfg->sense.zones[i]);
+    }
+}
+
+void touch_load_idac(uint8_t* buf){
+    uint8_t t, a, s;
+    for(uint8_t i = 0; i < 34; i++){
+        t = touch_key_channel(i);
+        a = t/12;
+        s = t%12;
+        buf[i] = psoc_get_idac(PSOC_BASE_ADDR+a, s);
+    }
+}
+
 
 void touch_reset_stat()
 {
@@ -210,6 +252,33 @@ void touch_reset_stat()
 
 void touch_update_config()
 {
+#ifdef PSOC
+    touch_sensor_init();
+    sleep_us(9000);
+    
+    for(uint8_t m = 0; m<3; m++){
+        psoc_set_finger_threshold(PSOC_BASE_ADDR+m, mai_cfg->sense.param[m].finger_threshold);
+        psoc_set_noise_threshold(PSOC_BASE_ADDR+m, mai_cfg->sense.param[m].noise_threshold);
+        psoc_set_neg_noise_threshold(PSOC_BASE_ADDR+m, mai_cfg->sense.param[m].neg_noise_threshold);
+        psoc_set_low_baseline_reset(PSOC_BASE_ADDR+m, mai_cfg->sense.param[m].low_baseline_reset);
+        psoc_set_hysteresis(PSOC_BASE_ADDR+m, mai_cfg->sense.param[m].hysteresis);
+        psoc_set_on_debounce(PSOC_BASE_ADDR+m, mai_cfg->sense.param[m].on_debounce);
+    }
+
+    for(uint8_t i = 0; i < 34; i++){
+        if(mai_cfg->sense.zones[i] == 0){
+            continue;
+        }
+        uint8_t k = touch_key_channel(i);
+        uint8_t a = k/12;
+        uint8_t s = k%12;
+        uint8_t n = psoc_get_idac(PSOC_BASE_ADDR+a, s);
+        psoc_set_idac(PSOC_BASE_ADDR+a, s, n+mai_cfg->sense.zones[i]);
+    }
+
+
+
+#else
     for (int m = 0; m < 3; m++) {
         mpr121_debounce(MPR121_BASE_ADDR + m,
                         mai_cfg->sense.debounce_touch,
@@ -223,4 +292,5 @@ void touch_update_config()
                       (mai_cfg->sense.filter >> 4) & 0x03,
                       mai_cfg->sense.filter & 0x07);
     }
+#endif
 }

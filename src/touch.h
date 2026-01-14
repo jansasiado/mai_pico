@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "board_defs.h"
 
 enum touch_keys {
     A1 = 0, A2, A3, A4, A5, A6, A7, A8,
@@ -36,5 +37,8 @@ bool touch_sensor_ok(unsigned i);
 void touch_update_config();
 unsigned touch_count(unsigned key);
 void touch_reset_stat();
-
+#ifdef PSOC
+void touch_load_idac(uint8_t *buf);
+void touch_set_idac();
+#endif
 #endif

@@ -10,20 +10,36 @@
 #include <stdbool.h>
 
 #include "board_defs.h"
-
+#ifdef PSOC
+typedef struct __attribute__((packed)){
+    uint16_t finger_threshold;
+    uint16_t noise_threshold;
+    uint16_t neg_noise_threshold;
+    uint8_t low_baseline_reset;
+    uint8_t hysteresis;
+    uint8_t on_debounce;  
+} psoc_param_t;
+#endif
 typedef struct __attribute__((packed)) {
     struct {
         uint32_t key_on;
         uint32_t key_off;
         uint8_t level;
     } color;
+#ifdef PSOC
+    struct{
+        psoc_param_t param[3];   
+        int8_t zones[34];
+    }sense;   
+#else
     struct {
         uint8_t filter;
         int8_t global;
         uint8_t debounce_touch;
-        uint8_t debounce_release;        
+        uint8_t debounce_release; 
         int8_t zones[34];
     } sense;
+#endif
     struct {
         uint8_t io4 : 4;
         uint8_t nkro : 4;
