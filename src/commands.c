@@ -74,7 +74,7 @@ static void print_sense_zone_s(const char *title, const int8_t *zones, int num)
 
 static void disp_sense(){
     printf("[Sense]\n");
-    printf("Address                 %2x    %2x    %2x\n",PSOC_BASE_ADDR,PSOC_BASE_ADDR+1,PSOC_BASE_ADDR+2);
+    printf("Address                  %2x     %2x     %2x\n",PSOC_BASE_ADDR,PSOC_BASE_ADDR+1,PSOC_BASE_ADDR+2);
     printf("Finger Threshold      | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].finger_threshold, mai_cfg->sense.param[1].finger_threshold, mai_cfg->sense.param[2].finger_threshold);
     printf("Noise Threshold       | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].noise_threshold, mai_cfg->sense.param[1].noise_threshold, mai_cfg->sense.param[2].noise_threshold);
     printf("Neg. Noise Threshold  | %4u | %4u | %4u |\n", mai_cfg->sense.param[0].neg_noise_threshold, mai_cfg->sense.param[1].neg_noise_threshold,mai_cfg->sense.param[2].neg_noise_threshold);

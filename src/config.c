@@ -39,9 +39,9 @@ static mai_cfg_t default_cfg = {
             .on_debounce = 3,
         },
         .param[2] = {
-            .finger_threshold = 200,
-            .noise_threshold = 150,
-            .neg_noise_threshold = 1900,
+            .finger_threshold = 100,
+            .noise_threshold = 75,
+            .neg_noise_threshold = 850,
             .low_baseline_reset = 30,
             .hysteresis = 5,
             .on_debounce = 3,
